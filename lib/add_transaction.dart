@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:v1/models/transaction_model.dart';
 import 'widgets/button.dart';
@@ -75,9 +76,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   void initState() {
     super.initState();
+    String? userID = FirebaseAuth.instance.currentUser?.uid;
 
     accountOptionsStream = FirebaseFirestore.instance
         .collection('accounts')
+        .where('uid', isEqualTo: userID)
         .orderBy('bankName')
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -133,6 +136,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               return Center(child: Text('Error: ${snapshot.error}'));
             } else {
               List<String> accountOptions = snapshot.data ?? [];
+
+              //remove account num from Cash account
+              accountOptions = accountOptions
+                  .map((option) => option.startsWith('Cash') ? 'Cash' : option)
+                  .toList();
+
               return Form(
                 key: _formKey,
                 child: Column(
@@ -233,7 +242,14 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     const SizedBox(height: 30.0),
                     CustomButton(onPress: () async {
                       if (_formKey.currentState!.validate()) {
-                        transactionDetails.account = selectedAccount;
+                        // transactionDetails.account = selectedAccount;
+                        String accountNumber = selectedAccount.split('- ').last;
+
+                        if (selectedAccount == 'Cash') {
+                          transactionDetails.account = '0';
+                        } else {
+                          transactionDetails.account = accountNumber;
+                        }
                         transactionDetails.type = selectedType;
                         transactionDetails.description = _descController.text;
                         transactionDetails.date = _dateController.text;

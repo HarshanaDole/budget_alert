@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:flutter/widgets.dart';
 import 'package:v1/add_account.dart';
 import 'package:v1/add_transaction.dart';
 import 'package:v1/login.dart';
@@ -36,15 +39,20 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   late Stream<List<TransactionDetails>> transactions;
   late Stream<List<AccountDetails>> accounts;
+  late StreamController<List<TransactionDetails>> _transactionStreamController;
+
+  String selectedAccount = '0';
 
   @override
   void initState() {
     super.initState();
     String? userID = FirebaseAuth.instance.currentUser?.uid;
 
+    _transactionStreamController = StreamController<List<TransactionDetails>>();
+
     transactions = FirebaseFirestore.instance
         .collection('transactions')
-        .where('uid', isEqualTo: userID)
+        .where('account', isEqualTo: selectedAccount)
         .orderBy('date', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -58,8 +66,43 @@ class _HomeState extends State<Home> {
         .orderBy('accountNumber')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => AccountDetails.fromMap(doc.data()))
+            .map((doc) => AccountDetails.fromMap({
+                  ...doc.data(),
+                  'bankName': doc['bankName'],
+                }))
             .toList());
+
+    _fetchTransactions(selectedAccount);
+  }
+
+  @override
+  void dispose() {
+    _transactionStreamController.close();
+    super.dispose();
+  }
+
+  void _fetchTransactions(String acccountNumber) {
+    transactions = FirebaseFirestore.instance
+        .collection('transactions')
+        .where('account', isEqualTo: acccountNumber)
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) =>
+                TransactionDetails.fromMap(doc.data() as Map<String, dynamic>))
+            .toList());
+
+    transactions.listen((event) {
+      _transactionStreamController.add(event);
+    });
+  }
+
+  Future<DocumentSnapshot> getBankData(String bankName) {
+    return FirebaseFirestore.instance
+        .collection('banks')
+        .where('name', isEqualTo: bankName)
+        .get()
+        .then((value) => value.docs.first);
   }
 
   @override
@@ -187,75 +230,121 @@ class _HomeState extends State<Home> {
                       children: [
                         for (var account in accountList)
                           GestureDetector(
-                            onTap: () {},
-                            child: Container(
-                              height: 100,
-                              width: 150,
-                              margin: EdgeInsets.only(right: 8.0),
-                              decoration: BoxDecoration(
-                                color: AppColors.LightGreen,
-                                borderRadius: BorderRadius.circular(10.0),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                    8.0, 16.0, 8.0, 16.0),
-                                child: Column(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Total Balance',
-                                                style: TextStyle(
-                                                  fontSize: 13,
+                            onTap: () {
+                              setState(() {
+                                selectedAccount =
+                                    account.accountNumber.toString();
+                              });
+                              _fetchTransactions(selectedAccount);
+                            },
+                            child: FutureBuilder<DocumentSnapshot>(
+                                future: getBankData(account.bankName),
+                                builder: (context, snapshot) {
+                                  if (snapshot.hasError) {
+                                    return Text('Error: ${snapshot.error}');
+                                  } else {
+                                    Map<String, dynamic> bankData =
+                                        snapshot.data!.data()
+                                            as Map<String, dynamic>;
+                                    Color lightColor =
+                                        _parseColor(bankData['lightColor']);
+
+                                    return Container(
+                                      height: 100,
+                                      width: 150,
+                                      margin: EdgeInsets.only(right: 8.0),
+                                      decoration: BoxDecoration(
+                                        color: lightColor,
+                                        borderRadius:
+                                            BorderRadius.circular(10.0),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            8.0, 16.0, 8.0, 16.0),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        'Total Balance',
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        'LKR ${account.balance}',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                              Text(
-                                                'LKR ${account.balance}',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
+                                                FutureBuilder<DocumentSnapshot>(
+                                                    future: getBankData(
+                                                        account.bankName),
+                                                    builder:
+                                                        (context, snapshot) {
+                                                      if (snapshot.hasError) {
+                                                        return Icon(
+                                                            Icons.error);
+                                                      } else {
+                                                        Map<String, dynamic>
+                                                            bankData = snapshot
+                                                                    .data!
+                                                                    .data()
+                                                                as Map<String,
+                                                                    dynamic>;
+                                                        Color darkColor =
+                                                            _parseColor(bankData[
+                                                                'darkColor']);
+
+                                                        return CircleAvatar(
+                                                          backgroundColor:
+                                                              darkColor,
+                                                          radius: 15,
+                                                          child: Image.asset(
+                                                            'assets/${bankData['logoUrl']}',
+                                                            height: 15,
+                                                            width: 15,
+                                                            color: Colors.white,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }),
+                                              ],
+                                            ),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  account.bankName,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
-                                        CircleAvatar(
-                                          backgroundColor: AppColors.DarkGreen,
-                                          radius: 15,
-                                          child: Image.asset(
-                                            'assets/rupiyal.png',
-                                            height: 15,
-                                            width: 15,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          account.bankName,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                                      ),
+                                    );
+                                  }
+                                }),
                           ),
                         GestureDetector(
                           onTap: () {
@@ -396,5 +485,14 @@ class _HomeState extends State<Home> {
         ),
       ),
     );
+  }
+
+  Color _parseColor(String colorString) {
+    List<String> components = colorString.split(',');
+    int r = int.parse(components[0]);
+    int g = int.parse(components[1]);
+    int b = int.parse(components[2]);
+    double opacity = double.parse(components[3]);
+    return Color.fromRGBO(r, g, b, opacity);
   }
 }

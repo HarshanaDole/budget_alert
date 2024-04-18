@@ -6,7 +6,7 @@ class TransactionDetails {
   late double amount;
 
   TransactionDetails({
-    this.account = '',
+    this.account = '0',
     this.type = '',
     this.description = '',
     this.date = '',

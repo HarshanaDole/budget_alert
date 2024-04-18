@@ -13,20 +13,45 @@ class AddAccountPage extends StatefulWidget {
 }
 
 class _AddAccountPageState extends State<AddAccountPage> {
-  List bankOptions = [
-    'Commercial Bank',
-    'National Savings Bank',
-    'Bank of Ceylon',
-    'Sampath Bank'
-  ];
+  // List bankOptions = [
+  //   'Commercial Bank',
+  //   'National Savings Bank',
+  //   'Bank of Ceylon',
+  //   'Sampath Bank'
+  // ];
 
-  String selectedBank = 'Commercial Bank';
+  List bankOptions = [];
+
+  String selectedBank = '';
 
   final _accController = TextEditingController();
   final _cardController = TextEditingController();
   final _balController = TextEditingController();
 
   final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchBankOptions();
+  }
+
+  Future<void> fetchBankOptions() async {
+    try {
+      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+          await FirebaseFirestore.instance.collection('banks').get();
+
+      List<String> banks =
+          querySnapshot.docs.map((doc) => doc.get('name') as String).toList();
+
+      setState(() {
+        bankOptions = banks;
+        selectedBank = bankOptions.isNotEmpty ? bankOptions[0] : '';
+      });
+    } catch (e) {
+      print('Error fetching bank options: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
