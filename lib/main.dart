@@ -43,6 +43,8 @@ class _HomeState extends State<Home> {
 
   String selectedAccount = '0';
 
+  final Map<String, DocumentSnapshot> _bankDataCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -97,12 +99,18 @@ class _HomeState extends State<Home> {
     });
   }
 
-  Future<DocumentSnapshot> getBankData(String bankName) {
-    return FirebaseFirestore.instance
-        .collection('banks')
-        .where('name', isEqualTo: bankName)
-        .get()
-        .then((value) => value.docs.first);
+  Future<DocumentSnapshot> getBankData(String bankName) async {
+    if (_bankDataCache.containsKey(bankName)) {
+      return _bankDataCache[bankName]!;
+    } else {
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection('banks')
+          .where('name', isEqualTo: bankName)
+          .get()
+          .then((value) => value.docs.first);
+      _bankDataCache[bankName] = snapshot;
+      return snapshot;
+    }
   }
 
   @override
@@ -213,165 +221,234 @@ class _HomeState extends State<Home> {
               ],
             ),
             SingleChildScrollView(
+              padding: const EdgeInsets.only(left: 12.0),
               scrollDirection: Axis.horizontal,
               child: StreamBuilder<List<AccountDetails>>(
                 stream: accounts,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return CircularProgressIndicator();
+                    return const Center(child: CircularProgressIndicator());
                   } else if (snapshot.hasError) {
                     return Text('Error: ${snapshot.error}');
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Text('No accounts found');
                   } else {
-                    List<AccountDetails>? accountList = snapshot.data;
-                    if (accountList == null || accountList.isEmpty) {
-                      return Text('No accounts found');
-                    }
-                    return Row(
-                      children: [
-                        for (var account in accountList)
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                selectedAccount =
-                                    account.accountNumber.toString();
-                              });
-                              _fetchTransactions(selectedAccount);
-                            },
-                            child: FutureBuilder<DocumentSnapshot>(
-                                future: getBankData(account.bankName),
-                                builder: (context, snapshot) {
-                                  if (snapshot.hasError) {
-                                    return Text('Error: ${snapshot.error}');
-                                  } else {
-                                    Map<String, dynamic> bankData =
-                                        snapshot.data!.data()
-                                            as Map<String, dynamic>;
-                                    Color lightColor =
-                                        _parseColor(bankData['lightColor']);
+                    List<AccountDetails> accountList = snapshot.data!;
+                    return SizedBox(
+                      height: 130,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          for (var account in accountList)
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  selectedAccount =
+                                      account.accountNumber.toString();
+                                });
+                                _fetchTransactions(selectedAccount);
+                              },
+                              child: FutureBuilder<DocumentSnapshot>(
+                                  future: getBankData(account.bankName),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return Container(
+                                        width: 150,
+                                        height: 100,
+                                        margin:
+                                            const EdgeInsets.only(right: 8.0),
+                                        child: const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                    } else if (snapshot.hasError) {
+                                      return Text('Error: ${snapshot.error}');
+                                    } else if (snapshot.data == null ||
+                                        !snapshot.data!.exists) {
+                                      return const Text('Bank data not found');
+                                    } else {
+                                      Map<String, dynamic> bankData =
+                                          snapshot.data!.data()
+                                              as Map<String, dynamic>;
+                                      Color lightColor =
+                                          _parseColor(bankData['lightColor']);
 
-                                    return Container(
-                                      height: 100,
-                                      width: 150,
-                                      margin: EdgeInsets.only(right: 8.0),
-                                      decoration: BoxDecoration(
-                                        color: lightColor,
-                                        borderRadius:
-                                            BorderRadius.circular(10.0),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            8.0, 16.0, 8.0, 16.0),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        'Total Balance',
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        'LKR ${account.balance}',
-                                                        style: TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                FutureBuilder<DocumentSnapshot>(
-                                                    future: getBankData(
-                                                        account.bankName),
-                                                    builder:
-                                                        (context, snapshot) {
-                                                      if (snapshot.hasError) {
-                                                        return Icon(
-                                                            Icons.error);
-                                                      } else {
-                                                        Map<String, dynamic>
-                                                            bankData = snapshot
-                                                                    .data!
-                                                                    .data()
-                                                                as Map<String,
-                                                                    dynamic>;
-                                                        Color darkColor =
-                                                            _parseColor(bankData[
-                                                                'darkColor']);
-
-                                                        return CircleAvatar(
-                                                          backgroundColor:
-                                                              darkColor,
-                                                          radius: 15,
-                                                          child: Image.asset(
-                                                            'assets/${bankData['logoUrl']}',
-                                                            height: 15,
-                                                            width: 15,
-                                                            color: Colors.white,
-                                                          ),
-                                                        );
-                                                      }
-                                                    }),
-                                              ],
-                                            ),
-                                            Row(
-                                              children: [
-                                                Text(
-                                                  account.bankName,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                      return Container(
+                                        height: 100,
+                                        width: 150,
+                                        margin:
+                                            const EdgeInsets.only(right: 8.0),
+                                        decoration: BoxDecoration(
+                                          color: lightColor,
+                                          borderRadius:
+                                              BorderRadius.circular(10.0),
+                                          boxShadow: [
+                                            if (selectedAccount ==
+                                                account.accountNumber
+                                                    .toString())
+                                              const BoxShadow(
+                                                color: Colors.black,
+                                                offset: Offset(3.0, 3.0),
+                                                blurRadius: 8.0,
+                                                spreadRadius: 1.0,
+                                              ),
+                                            if (selectedAccount ==
+                                                account.accountNumber
+                                                    .toString())
+                                              const BoxShadow(
+                                                color: Colors.white,
+                                                offset: Offset(0.0, 0.0),
+                                                blurRadius: 0,
+                                                spreadRadius: 0,
+                                              ),
                                           ],
                                         ),
-                                      ),
-                                    );
-                                  }
-                                }),
-                          ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => AddAccountPage()));
-                          },
-                          child: Container(
-                            height: 100,
-                            width: 150,
-                            margin: EdgeInsets.only(right: 8.0),
-                            decoration: BoxDecoration(
-                              color: Colors.grey
-                                  .withOpacity(0.5), // Adjust color as needed
-                              borderRadius: BorderRadius.circular(10.0),
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              8.0, 16.0, 8.0, 16.0),
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        const Text(
+                                                          'Total Balance',
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          'LKR ${account.balance}',
+                                                          style:
+                                                              const TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  FutureBuilder<
+                                                          DocumentSnapshot>(
+                                                      future: getBankData(
+                                                          account.bankName),
+                                                      builder:
+                                                          (context, snapshot) {
+                                                        if (snapshot
+                                                                .connectionState ==
+                                                            ConnectionState
+                                                                .waiting) {
+                                                          return const CircularProgressIndicator();
+                                                        } else if (snapshot
+                                                            .hasError) {
+                                                          return Text(
+                                                              'Error: ${snapshot.error}');
+                                                        } else if (!snapshot
+                                                                .hasData ||
+                                                            snapshot.data ==
+                                                                null) {
+                                                          return const Text(
+                                                              'No data available');
+                                                        } else if (snapshot
+                                                            .hasError) {
+                                                          return const Icon(
+                                                              Icons.error);
+                                                        } else {
+                                                          Map<String, dynamic>
+                                                              bankData =
+                                                              snapshot.data!
+                                                                      .data()
+                                                                  as Map<String,
+                                                                      dynamic>;
+                                                          Color darkColor =
+                                                              _parseColor(bankData[
+                                                                  'darkColor']);
+
+                                                          return CircleAvatar(
+                                                            backgroundColor:
+                                                                darkColor,
+                                                            radius: 15,
+                                                            child: Image.asset(
+                                                              'assets/${bankData['logoUrl']}',
+                                                              height: 15,
+                                                              width: 15,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
+                                                          );
+                                                        }
+                                                      }),
+                                                ],
+                                              ),
+                                              Row(
+                                                children: [
+                                                  if (account.bankName ==
+                                                      'Cash')
+                                                    Text(
+                                                      account.bankName,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  if (account.bankName !=
+                                                      'Cash')
+                                                    Text(
+                                                      'AC - xxxx${account.accountNumber.toString().substring(account.accountNumber.toString().length - 4)}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }),
                             ),
-                            child: Center(
-                              child: Icon(
-                                Icons.add_circle,
-                                size: 40,
-                                color: Colors.white,
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => AddAccountPage()));
+                            },
+                            child: Container(
+                              height: 100,
+                              width: 150,
+                              margin: const EdgeInsets.only(right: 8.0),
+                              decoration: BoxDecoration(
+                                color: Colors.grey
+                                    .withOpacity(0.5), // Adjust color as needed
+                                borderRadius: BorderRadius.circular(10.0),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.add_circle,
+                                  size: 40,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     );
                   }
                 },
@@ -397,7 +474,7 @@ class _HomeState extends State<Home> {
             const Row(
               children: [
                 Text(
-                  'Today',
+                  'Recent',
                   style: TextStyle(color: AppColors.GreyText),
                 ),
               ],
@@ -407,9 +484,14 @@ class _HomeState extends State<Home> {
                 stream: transactions,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
+                    return const Center(child: CircularProgressIndicator());
                   } else if (snapshot.hasError) {
                     return Center(child: Text('Error: ${snapshot.error}'));
+                  }
+                  List<TransactionDetails> transactionList =
+                      snapshot.data ?? [];
+                  if (transactionList.isEmpty) {
+                    return const Center(child: Text('No transactions yet'));
                   } else {
                     List<TransactionDetails> transactionList =
                         snapshot.data ?? [];
@@ -436,14 +518,14 @@ class _HomeState extends State<Home> {
                                     children: [
                                       Text(
                                         transaction.description,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w400,
                                         ),
                                       ),
                                       Text(
                                         transaction.date,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w300,
                                         ),
@@ -452,7 +534,7 @@ class _HomeState extends State<Home> {
                                   ),
                                   Text(
                                     '-LKR ${transaction.amount}',
-                                    style: TextStyle(color: Colors.red),
+                                    style: const TextStyle(color: Colors.red),
                                   ),
                                 ],
                               ),
