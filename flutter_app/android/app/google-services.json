@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "168607691428",
+    "project_id": "budget-alert-20ced",
+    "storage_bucket": "budget-alert-20ced.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168607691428:android:2f239b1b71ab8a0dc0ac31",
+        "android_client_info": {
+          "package_name": "com.example.test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgBNiy93E05GYAgR23tYyeFNPQ0TnYyDM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168607691428:android:3f3e3b3e67931ab9c0ac31",
+        "android_client_info": {
+          "package_name": "com.example.budget_alert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgBNiy93E05GYAgR23tYyeFNPQ0TnYyDM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
