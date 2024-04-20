@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:Budget_Alert/models/transaction_model.dart';
+import 'package:budget_alert/models/transaction_model.dart';
 import 'widgets/button.dart';
 import 'components/app_colors.dart';
 import 'widgets/dropdownfield.dart';

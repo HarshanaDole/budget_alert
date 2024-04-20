@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:Budget_Alert/components/app_colors.dart';
-import 'package:Budget_Alert/main.dart';
-import 'package:Budget_Alert/registration.dart';
+import 'package:budget_alert/components/app_colors.dart';
+import 'package:budget_alert/main.dart';
+import 'package:budget_alert/registration.dart';
 
 class LoginPage extends StatefulWidget {
   @override
