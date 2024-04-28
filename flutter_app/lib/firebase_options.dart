@@ -67,7 +67,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '168607691428',
     projectId: 'budget-alert-20ced',
     storageBucket: 'budget-alert-20ced.appspot.com',
-    iosBundleId: 'com.example.budget_alert',
+    iosBundleId: 'com.example.v1',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -76,6 +76,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '168607691428',
     projectId: 'budget-alert-20ced',
     storageBucket: 'budget-alert-20ced.appspot.com',
-    iosBundleId: 'com.example.budget_alert.RunnerTests',
+    iosBundleId: 'com.example.v1.RunnerTests',
   );
 }

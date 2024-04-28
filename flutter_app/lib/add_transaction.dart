@@ -243,13 +243,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     CustomButton(onPress: () async {
                       if (_formKey.currentState!.validate()) {
                         // transactionDetails.account = selectedAccount;
-                        String accountNumber = selectedAccount.split('- ').last;
+                        String accountNumberString =
+                            selectedAccount.split('- ').last;
+                        int accountNumber = selectedAccount == 'Cash'
+                            ? 0
+                            : int.parse(accountNumberString);
 
-                        if (selectedAccount == 'Cash') {
-                          transactionDetails.account = '0';
-                        } else {
-                          transactionDetails.account = accountNumber;
-                        }
+                        transactionDetails.account = accountNumber;
                         transactionDetails.type = selectedType;
                         transactionDetails.description = _descController.text;
                         transactionDetails.date = _dateController.text;
@@ -273,6 +273,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                             'type': transactionDetails.type,
                             'description': transactionDetails.description,
                             'date': formattedDateForFirestore,
+                            'currency': 'LKR',
                             'amount': transactionDetails.amount,
                           });
 

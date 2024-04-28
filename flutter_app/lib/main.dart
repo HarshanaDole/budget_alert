@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:budget_alert/test_sms_recieve.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/widgets.dart';
@@ -43,7 +44,7 @@ class _HomeState extends State<Home> {
   late Stream<List<AccountDetails>> accounts;
   late StreamController<List<TransactionDetails>> _transactionStreamController;
 
-  String selectedAccount = '0';
+  int selectedAccount = 0;
 
   final Map<String, DocumentSnapshot> _bankDataCache = {};
 
@@ -78,9 +79,13 @@ class _HomeState extends State<Home> {
 
     _fetchTransactions(selectedAccount);
 
-    fetchSenderIds().then((senderIds) {
-      print('Sender IDs: $senderIds');
-      _readAndSendMessages(senderIds);
+    fetchSenderIds().then((senderIdsAndDigits) {
+      print('$senderIdsAndDigits');
+      _readAndSendMessages(
+        senderIdsAndDigits['senderIds']!.map((e) => e as String).toList(),
+        senderIdsAndDigits['accountNums']!.map((e) => e as String).toSet(),
+        senderIdsAndDigits['lastCardNums']!.map((e) => e as String).toSet(),
+      );
     });
   }
 
@@ -90,7 +95,7 @@ class _HomeState extends State<Home> {
     super.dispose();
   }
 
-  void _fetchTransactions(String acccountNumber) {
+  void _fetchTransactions(int acccountNumber) {
     transactions = FirebaseFirestore.instance
         .collection('transactions')
         .where('account', isEqualTo: acccountNumber)
@@ -127,8 +132,12 @@ class _HomeState extends State<Home> {
     }
   }
 
-  Future<Set<String>> fetchSenderIds() async {
-    Set<String> senderIds = {};
+  Future<Map<String, Set<dynamic>>> fetchSenderIds() async {
+    Map<String, Set<dynamic>> senderIdsAndDigits = {
+      'senderIds': <String>{},
+      'accountNums': <String>{},
+      'lastCardNums': <String>{},
+    };
     String? userID = FirebaseAuth.instance.currentUser?.uid;
     if (userID != null) {
       QuerySnapshot accountSnapshot = await FirebaseFirestore.instance
@@ -136,11 +145,16 @@ class _HomeState extends State<Home> {
           .where('uid', isEqualTo: userID)
           .get();
 
-      List<String> bankNames = accountSnapshot.docs
-          .map((doc) => doc.get('bankName') as String)
+      List<Map<String, dynamic>> accountsData = accountSnapshot.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
           .toList();
 
-      for (String bankName in bankNames) {
+      for (Map<String, dynamic> accountData in accountsData) {
+        String bankName = accountData['bankName'] as String;
+        String? accountNumber = (accountData['accountNumber'] ?? '').toString();
+        String? lastCardNum = (accountData['lastFourDigits'] ?? '').toString();
+
+        // get senderId from banks collection based on bankName
         DocumentSnapshot bankSnapshot = await getBankData(bankName);
         if (bankSnapshot.exists) {
           if (bankName == 'Cash') {
@@ -151,18 +165,21 @@ class _HomeState extends State<Home> {
 
           if (data != null && data.containsKey('senderId')) {
             String senderId = data['senderId'] as String;
-            senderIds.add(senderId);
+            senderIdsAndDigits['senderIds']!.add(senderId);
+            senderIdsAndDigits['accountNums']!.add(accountNumber);
+            senderIdsAndDigits['lastCardNums']!.add(lastCardNum);
           } else {
             print('Warning: No senderId found for bank $bankName');
           }
         }
       }
     }
-    return senderIds;
+    return senderIdsAndDigits;
   }
 
-  Future<void> _readAndSendMessages(Set<String> senderIds) async {
-    await SmsReader.readAndSendMessages(senderIds.toList());
+  Future<void> _readAndSendMessages(List<String> senderIds,
+      Set<String> accountNums, Set<String> lastCardNums) async {
+    await SmsReader.readAndSendMessages(senderIds, accountNums, lastCardNums);
   }
 
   @override
@@ -192,7 +209,7 @@ class _HomeState extends State<Home> {
                               color: Colors.white, fontWeight: FontWeight.w300),
                         ),
                         Text(
-                          'LKR 750,000.00',
+                          'LKR 150,000.00',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -313,8 +330,7 @@ class _HomeState extends State<Home> {
                             GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  selectedAccount =
-                                      account.accountNumber.toString();
+                                  selectedAccount = account.accountNumber;
                                 });
                                 _fetchTransactions(selectedAccount);
                               },
@@ -355,8 +371,7 @@ class _HomeState extends State<Home> {
                                               BorderRadius.circular(10.0),
                                           boxShadow: [
                                             if (selectedAccount ==
-                                                account.accountNumber
-                                                    .toString())
+                                                account.accountNumber)
                                               const BoxShadow(
                                                 color: Colors.black,
                                                 offset: Offset(3.0, 3.0),
@@ -364,8 +379,7 @@ class _HomeState extends State<Home> {
                                                 spreadRadius: 1.0,
                                               ),
                                             if (selectedAccount ==
-                                                account.accountNumber
-                                                    .toString())
+                                                account.accountNumber)
                                               const BoxShadow(
                                                 color: Colors.white,
                                                 offset: Offset(0.0, 0.0),
@@ -503,8 +517,7 @@ class _HomeState extends State<Home> {
                               width: 150,
                               margin: const EdgeInsets.only(right: 8.0),
                               decoration: BoxDecoration(
-                                color: Colors.grey
-                                    .withOpacity(0.5), // Adjust color as needed
+                                color: Colors.grey.withOpacity(0.5),
                                 borderRadius: BorderRadius.circular(10.0),
                               ),
                               child: const Center(
@@ -559,6 +572,8 @@ class _HomeState extends State<Home> {
                   }
                   List<TransactionDetails> transactionList =
                       snapshot.data ?? [];
+                  transactionList = transactionList.take(20).toList();
+
                   if (transactionList.isEmpty) {
                     return const Center(child: Text('No transactions yet'));
                   } else {
@@ -585,11 +600,16 @@ class _HomeState extends State<Home> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        transaction.description,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w400,
+                                      SizedBox(
+                                        width: 250,
+                                        child: Text(
+                                          transaction.description,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       Text(
@@ -602,7 +622,7 @@ class _HomeState extends State<Home> {
                                     ],
                                   ),
                                   Text(
-                                    '-LKR ${transaction.amount}',
+                                    '-${transaction.currency} ${transaction.amount}',
                                     style: const TextStyle(color: Colors.red),
                                   ),
                                 ],

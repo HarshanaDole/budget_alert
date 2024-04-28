@@ -28,7 +28,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:168607691428:android:3f3e3b3e67931ab9c0ac31",
         "android_client_info": {
-          "package_name": "com.example.budget_alert"
+          "package_name": "com.example.v1"
         }
       },
       "oauth_client": [],
