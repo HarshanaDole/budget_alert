@@ -26,6 +26,9 @@ class SmsReader {
                 ))
             .toList();
 
+        //limit to 50 for testing
+        messages = messages.take(50).toList();
+
         //send each message to the backend
         for (SmsMessage message in messages) {
           await sendToBackend(message, senderId);
@@ -67,8 +70,7 @@ class SmsReader {
 
         for (String match in matches) {
           // check if the last four digits match any user-defined account number or card number
-          if (lastFourDigits.contains(match) ||
-              lastCardNums.contains(match)) {
+          if (lastFourDigits.contains(match) || lastCardNums.contains(match)) {
             // check if the message contains transaction-related keywords
             if (RegExp('Purchase at').hasMatch(body)) return true;
             if (RegExp('Credit for').hasMatch(body)) return true;

@@ -13,13 +13,6 @@ class AddAccountPage extends StatefulWidget {
 }
 
 class _AddAccountPageState extends State<AddAccountPage> {
-  // List bankOptions = [
-  //   'Commercial Bank',
-  //   'National Savings Bank',
-  //   'Bank of Ceylon',
-  //   'Sampath Bank'
-  // ];
-
   List bankOptions = [];
 
   String selectedBank = '';
@@ -123,10 +116,16 @@ class _AddAccountPageState extends State<AddAccountPage> {
                 if (_formKey.currentState!.validate()) {
                   User? user = FirebaseAuth.instance.currentUser;
                   if (user != null) {
+                    String fullAccountNumber = _accController.text;
+                    String lastFourDigits = fullAccountNumber.length > 4
+                        ? fullAccountNumber
+                            .substring(fullAccountNumber.length - 4)
+                        : fullAccountNumber;
                     AccountDetails accountDetails = AccountDetails(
                       bankName: selectedBank,
-                      accountNumber: int.parse(_accController.text),
-                      lastFourDigits: int.parse(_cardController.text),
+                      accountNumber: _accController.text,
+                      lastFourDigits: lastFourDigits,
+                      cardNumber: _cardController.text,
                       balance: double.parse(_balController.text),
                       uid: user.uid,
                     );

@@ -18,18 +18,24 @@ def receive_sms():
     bank = data.get('bank')
     date = data.get('date')
 
-    # For testing purposes
-    sms_body_test = 'Dear Cardholder, Purchase at MP Centauri Technology HoAmsterdam NL for LKR 950.00 on 16/03/24 03:00 PM has been authorised on your debit card ending #3901.'
-    bank_test = 'COMBANK'
-
     transaction_details = extract_transaction_details(sms_body, bank, date)
     
     print("Transaction Details:", transaction_details)
 
     if transaction_details:
-        store_transaction_details(transaction_details)
+        # Check if a similar transaction already exists
+        if not is_duplicate_transaction(transaction_details):
+            store_transaction_details(transaction_details)
+        else:
+            print("Duplicate transaction. Not storing.")
 
     return jsonify({'message': 'SMS received and processed successfully'}), 200
+
+@app.route('/rescan', methods=['POST'])
+def rescan():
+    # Delete all existing transactions
+    delete_existing_transactions()
+    return jsonify({'message': 'Existing transactions deleted for rescan'}), 200
 
 def format_date(date_string):
     try:
@@ -57,7 +63,7 @@ def extract_transaction_details(sms_body, bank, date):
             date_string = re.findall('\d{2}\/\d{2}\/\d{2} \d{2}\:\d{2} [APM]{2}', sms_body)[0]
             transaction_details['date'] = format_date(date_string)
             card = re.findall('#(\d{4})', sms_body)[0]
-            transaction_details['account'] = find_account_by_last_four_digits(int(card))
+            transaction_details['account'] = find_account_by_card(card)
 
         if re.search('Credit for', sms_body):
             transaction_details['type'] = 'INCOME'
@@ -79,7 +85,8 @@ def extract_transaction_details(sms_body, bank, date):
             branch_name = re.findall('through\s+(\S+\s*-\s*\S+)\s+BR', sms_body)[0]
             transaction_details['description'] = f'CRM Deposit from {branch_name}'
             transaction_details['date'] = format_date(date)
-            transaction_details['account'] = re.findall('account\s+(\d+\D+\d+)', sms_body)[0]
+            account_string = re.findall('account\s[\d*Xx]+(\d{4})', sms_body)[0]
+            transaction_details['account'] = find_account_by_last_four_digits(account_string)
 
         if re.search('Withdrawal at', sms_body):
             transaction_details['type'] = 'ATM Withdrawal'
@@ -92,12 +99,29 @@ def extract_transaction_details(sms_body, bank, date):
             date_string = re.findall('\d{2}\/\d{2}\/\d{2} \d{2}\:\d{2} [APM]{2}', sms_body)[0]
             transaction_details['date'] = format_date(date_string)
             card = re.findall('#(\d{4})', sms_body)[0]
-            transaction_details['account'] = find_account_by_last_four_digits(int(card))
+            transaction_details['account'] = find_account_by_card(card)
 
     return transaction_details
 
-def find_account_by_last_four_digits(card_number):
-    accounts_ref = db.collection('accounts').where('lastFourDigits', '==', card_number).limit(1).get()
+def is_duplicate_transaction(transaction_details):
+    # Check if a similar transaction already exists
+    transactions_ref = db.collection('transactions').where('description', '==', transaction_details['description']).where('amount', '==', transaction_details['amount']).where('date', '==', transaction_details['date']).limit(1).get()
+    return len(transactions_ref) > 0
+
+def delete_existing_transactions():
+    # Delete all existing transactions
+    transactions_ref = db.collection('transactions').get()
+    for transaction in transactions_ref:
+        db.collection('transactions').document(transaction.id).delete()
+
+def find_account_by_card(card_number):
+    accounts_ref = db.collection('accounts').where('cardNumber', '==', card_number).limit(1).get()
+    for account in accounts_ref:
+        return account.to_dict()['accountNumber']
+    return None
+
+def find_account_by_last_four_digits(last_digits):
+    accounts_ref = db.collection('accounts').where('lastFourDigits', '==', last_digits).limit(1).get()
     for account in accounts_ref:
         return account.to_dict()['accountNumber']
     return None

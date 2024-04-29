@@ -17,6 +17,7 @@ import 'models/transaction_model.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:intl/intl.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,9 +45,13 @@ class _HomeState extends State<Home> {
   late Stream<List<AccountDetails>> accounts;
   late StreamController<List<TransactionDetails>> _transactionStreamController;
 
-  int selectedAccount = 0;
+  String selectedAccount = '0';
 
   final Map<String, DocumentSnapshot> _bankDataCache = {};
+
+  List<String> senderIds = [];
+  Set<String> accountNums = {};
+  Set<String> lastCardNums = {};
 
   @override
   void initState() {
@@ -81,11 +86,14 @@ class _HomeState extends State<Home> {
 
     fetchSenderIds().then((senderIdsAndDigits) {
       print('$senderIdsAndDigits');
-      _readAndSendMessages(
-        senderIdsAndDigits['senderIds']!.map((e) => e as String).toList(),
-        senderIdsAndDigits['accountNums']!.map((e) => e as String).toSet(),
-        senderIdsAndDigits['lastCardNums']!.map((e) => e as String).toSet(),
-      );
+      senderIds =
+          senderIdsAndDigits['senderIds']!.map((e) => e as String).toList();
+      accountNums =
+          senderIdsAndDigits['accountNums']!.map((e) => e as String).toSet();
+      lastCardNums =
+          senderIdsAndDigits['lastCardNums']!.map((e) => e as String).toSet();
+
+      _readAndSendMessages(senderIds, accountNums, lastCardNums);
     });
   }
 
@@ -95,7 +103,7 @@ class _HomeState extends State<Home> {
     super.dispose();
   }
 
-  void _fetchTransactions(int acccountNumber) {
+  void _fetchTransactions(String acccountNumber) {
     transactions = FirebaseFirestore.instance
         .collection('transactions')
         .where('account', isEqualTo: acccountNumber)
@@ -152,7 +160,7 @@ class _HomeState extends State<Home> {
       for (Map<String, dynamic> accountData in accountsData) {
         String bankName = accountData['bankName'] as String;
         String? accountNumber = (accountData['accountNumber'] ?? '').toString();
-        String? lastCardNum = (accountData['lastFourDigits'] ?? '').toString();
+        String? cardNumber = (accountData['cardNumber'] ?? '').toString();
 
         // get senderId from banks collection based on bankName
         DocumentSnapshot bankSnapshot = await getBankData(bankName);
@@ -167,7 +175,7 @@ class _HomeState extends State<Home> {
             String senderId = data['senderId'] as String;
             senderIdsAndDigits['senderIds']!.add(senderId);
             senderIdsAndDigits['accountNums']!.add(accountNumber);
-            senderIdsAndDigits['lastCardNums']!.add(lastCardNum);
+            senderIdsAndDigits['lastCardNums']!.add(cardNumber);
           } else {
             print('Warning: No senderId found for bank $bankName');
           }
@@ -179,7 +187,33 @@ class _HomeState extends State<Home> {
 
   Future<void> _readAndSendMessages(List<String> senderIds,
       Set<String> accountNums, Set<String> lastCardNums) async {
-    await SmsReader.readAndSendMessages(senderIds, accountNums, lastCardNums);
+    try {
+      await SmsReader.readAndSendMessages(senderIds, accountNums, lastCardNums);
+    } catch (e) {
+      print('Error reading and sending SMS: $e');
+    }
+  }
+
+  Future<void> rescan() async {
+    final permissionStatus = await Permission.sms.status;
+    if (permissionStatus.isGranted) {
+      _readAndSendMessages(senderIds, accountNums, lastCardNums);
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Permission Required'),
+          content: Text(
+              'Please grant SMS permission from settings to rescan messages.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -224,21 +258,16 @@ class _HomeState extends State<Home> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            checkPermission();
+                            checkPermission().then((_) {
+                              rescan();
+                            });
                           },
                           icon: const Icon(
                             Icons.refresh,
                             color: Colors.white,
                             size: 30,
                           ),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(
-                            Icons.alarm,
-                            color: Colors.white,
-                            size: 30,
-                          ),
+                          tooltip: 'Rescan',
                         ),
                         IconButton(
                           onPressed: () {
@@ -320,6 +349,7 @@ class _HomeState extends State<Home> {
                     return const Text('No accounts found');
                   } else {
                     List<AccountDetails> accountList = snapshot.data!;
+
                     return SizedBox(
                       height: 130,
                       child: Row(
@@ -330,6 +360,8 @@ class _HomeState extends State<Home> {
                             GestureDetector(
                               onTap: () {
                                 setState(() {
+                                  print(
+                                      'Account number: ${account.accountNumber}');
                                   selectedAccount = account.accountNumber;
                                 });
                                 _fetchTransactions(selectedAccount);
@@ -601,11 +633,11 @@ class _HomeState extends State<Home> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       SizedBox(
-                                        width: 250,
+                                        width: 220,
                                         child: Text(
                                           transaction.description,
                                           style: const TextStyle(
-                                            fontSize: 15,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w400,
                                           ),
                                           maxLines: 2,
@@ -621,9 +653,20 @@ class _HomeState extends State<Home> {
                                       ),
                                     ],
                                   ),
-                                  Text(
-                                    '-${transaction.currency} ${transaction.amount}',
-                                    style: const TextStyle(color: Colors.red),
+                                  SizedBox(
+                                    width: 100,
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        '${transaction.type == "INCOME" || transaction.type == "REFUND" ? "+" : "-"}${transaction.currency} ${_formatAmount(transaction.amount)}',
+                                        style: TextStyle(
+                                            color: transaction.type ==
+                                                        "INCOME" ||
+                                                    transaction.type == "REFUND"
+                                                ? Colors.green
+                                                : Colors.red),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -666,4 +709,16 @@ class _HomeState extends State<Home> {
     double opacity = double.parse(components[3]);
     return Color.fromRGBO(r, g, b, opacity);
   }
+}
+
+String _formatAmount(double amount) {
+  NumberFormat formatter = NumberFormat('#,##0.00', 'en_US');
+  String formattedAmount = formatter.format(amount);
+
+  // if the amount ends with .00, remove the decimal part
+  if (formattedAmount.endsWith('.00')) {
+    formattedAmount = formattedAmount.substring(0, formattedAmount.length - 3);
+  }
+
+  return formattedAmount;
 }

@@ -245,9 +245,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                         // transactionDetails.account = selectedAccount;
                         String accountNumberString =
                             selectedAccount.split('- ').last;
-                        int accountNumber = selectedAccount == 'Cash'
-                            ? 0
-                            : int.parse(accountNumberString);
+                        String accountNumber = selectedAccount == 'Cash'
+                            ? '0'
+                            : accountNumberString;
 
                         transactionDetails.account = accountNumber;
                         transactionDetails.type = selectedType;

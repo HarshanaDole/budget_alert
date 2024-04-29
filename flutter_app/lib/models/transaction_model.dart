@@ -1,13 +1,13 @@
 class TransactionDetails {
   late String description;
-  late int account;
+  late String account;
   late String type;
   late String date;
   late String currency;
   late double amount;
 
   TransactionDetails({
-    this.account = 0,
+    this.account = '',
     this.type = '',
     this.description = '',
     this.date = '',
@@ -17,7 +17,7 @@ class TransactionDetails {
 
   factory TransactionDetails.fromMap(Map<String, dynamic> map) {
     return TransactionDetails(
-      account: map['account'] ?? 0.toInt(),
+      account: map['account'] ?? '',
       type: map['type'] ?? '',
       description: map['description'] ?? '',
       date: map['date'] ?? '',
