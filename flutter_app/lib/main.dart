@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:budget_alert/components/message_utils.dart';
+import 'package:budget_alert/edit_transaction.dart';
 import 'package:budget_alert/test_sms_recieve.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,6 +14,7 @@ import 'package:budget_alert/login.dart';
 import 'package:budget_alert/models/account_model.dart';
 import 'package:budget_alert/registration.dart';
 import 'package:budget_alert/sms_reader.dart';
+import 'package:budget_alert/edit_account.dart';
 import 'components/app_colors.dart';
 import 'models/transaction_model.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -41,13 +44,12 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
+  String? userID;
   late Stream<List<TransactionDetails>> transactions;
   late Stream<List<AccountDetails>> accounts;
   late StreamController<List<TransactionDetails>> _transactionStreamController;
 
-  String selectedAccount = '0';
-
-  final Map<String, DocumentSnapshot> _bankDataCache = {};
+  String selectedAccount = 'Cash';
 
   List<String> senderIds = [];
   Set<String> accountNums = {};
@@ -56,12 +58,14 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    String? userID = FirebaseAuth.instance.currentUser?.uid;
+
+    userID = FirebaseAuth.instance.currentUser?.uid;
 
     _transactionStreamController = StreamController<List<TransactionDetails>>();
 
     transactions = FirebaseFirestore.instance
         .collection('transactions')
+        .where('uid', isEqualTo: userID)
         .where('account', isEqualTo: selectedAccount)
         .orderBy('date', descending: true)
         .snapshots()
@@ -82,7 +86,7 @@ class _HomeState extends State<Home> {
                 }))
             .toList());
 
-    _fetchTransactions(selectedAccount);
+    _fetchTransactions(selectedAccount, userID!);
 
     fetchSenderIds().then((senderIdsAndDigits) {
       print('$senderIdsAndDigits');
@@ -93,7 +97,7 @@ class _HomeState extends State<Home> {
       lastCardNums =
           senderIdsAndDigits['lastCardNums']!.map((e) => e as String).toSet();
 
-      _readAndSendMessages(senderIds, accountNums, lastCardNums);
+      readMessages(senderIds, accountNums, lastCardNums, userID);
     });
   }
 
@@ -103,9 +107,10 @@ class _HomeState extends State<Home> {
     super.dispose();
   }
 
-  void _fetchTransactions(String acccountNumber) {
+  void _fetchTransactions(String acccountNumber, String userID) {
     transactions = FirebaseFirestore.instance
         .collection('transactions')
+        .where('uid', isEqualTo: userID)
         .where('account', isEqualTo: acccountNumber)
         .orderBy('date', descending: true)
         .snapshots()
@@ -117,103 +122,6 @@ class _HomeState extends State<Home> {
     transactions.listen((event) {
       _transactionStreamController.add(event);
     });
-  }
-
-  Future<DocumentSnapshot> getBankData(String bankName) async {
-    if (_bankDataCache.containsKey(bankName)) {
-      return _bankDataCache[bankName]!;
-    } else {
-      DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('banks')
-          .where('name', isEqualTo: bankName)
-          .get()
-          .then((value) => value.docs.first);
-      _bankDataCache[bankName] = snapshot;
-      return snapshot;
-    }
-  }
-
-  Future<void> checkPermission() async {
-    final status = await Permission.sms.status;
-    if (!status.isGranted) {
-      await Permission.sms.request();
-    }
-  }
-
-  Future<Map<String, Set<dynamic>>> fetchSenderIds() async {
-    Map<String, Set<dynamic>> senderIdsAndDigits = {
-      'senderIds': <String>{},
-      'accountNums': <String>{},
-      'lastCardNums': <String>{},
-    };
-    String? userID = FirebaseAuth.instance.currentUser?.uid;
-    if (userID != null) {
-      QuerySnapshot accountSnapshot = await FirebaseFirestore.instance
-          .collection('accounts')
-          .where('uid', isEqualTo: userID)
-          .get();
-
-      List<Map<String, dynamic>> accountsData = accountSnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-
-      for (Map<String, dynamic> accountData in accountsData) {
-        String bankName = accountData['bankName'] as String;
-        String? accountNumber = (accountData['accountNumber'] ?? '').toString();
-        String? cardNumber = (accountData['cardNumber'] ?? '').toString();
-
-        // get senderId from banks collection based on bankName
-        DocumentSnapshot bankSnapshot = await getBankData(bankName);
-        if (bankSnapshot.exists) {
-          if (bankName == 'Cash') {
-            continue;
-          }
-          Map<String, dynamic>? data =
-              bankSnapshot.data() as Map<String, dynamic>?;
-
-          if (data != null && data.containsKey('senderId')) {
-            String senderId = data['senderId'] as String;
-            senderIdsAndDigits['senderIds']!.add(senderId);
-            senderIdsAndDigits['accountNums']!.add(accountNumber);
-            senderIdsAndDigits['lastCardNums']!.add(cardNumber);
-          } else {
-            print('Warning: No senderId found for bank $bankName');
-          }
-        }
-      }
-    }
-    return senderIdsAndDigits;
-  }
-
-  Future<void> _readAndSendMessages(List<String> senderIds,
-      Set<String> accountNums, Set<String> lastCardNums) async {
-    try {
-      await SmsReader.readAndSendMessages(senderIds, accountNums, lastCardNums);
-    } catch (e) {
-      print('Error reading and sending SMS: $e');
-    }
-  }
-
-  Future<void> rescan() async {
-    final permissionStatus = await Permission.sms.status;
-    if (permissionStatus.isGranted) {
-      _readAndSendMessages(senderIds, accountNums, lastCardNums);
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Permission Required'),
-          content: Text(
-              'Please grant SMS permission from settings to rescan messages.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
   }
 
   @override
@@ -259,7 +167,8 @@ class _HomeState extends State<Home> {
                         IconButton(
                           onPressed: () {
                             checkPermission().then((_) {
-                              rescan();
+                              rescan(context, senderIds, accountNums,
+                                  lastCardNums, userID);
                             });
                           },
                           icon: const Icon(
@@ -360,11 +269,47 @@ class _HomeState extends State<Home> {
                             GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  print(
-                                      'Account number: ${account.accountNumber}');
-                                  selectedAccount = account.accountNumber;
+                                  print('Account: ${account.account}');
+                                  selectedAccount = account.account;
+                                  userID = account.uid;
                                 });
-                                _fetchTransactions(selectedAccount);
+                                _fetchTransactions(selectedAccount, userID!);
+                              },
+                              onLongPress: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (BuildContext context) {
+                                    return AlertDialog(
+                                      title: Text('Edit Account'),
+                                      content: Text(
+                                          'Would you like to edit this account?'),
+                                      actions: <Widget>[
+                                        TextButton(
+                                          child: Text('Edit'),
+                                          onPressed: () {
+                                            Navigator.of(context)
+                                                .pop(); // Close the dialog
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    EditAccountPage(
+                                                        accountDetails:
+                                                            account),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        TextButton(
+                                          child: Text('Cancel'),
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
                               },
                               child: FutureBuilder<DocumentSnapshot>(
                                   future: getBankData(account.bankName),
@@ -403,7 +348,7 @@ class _HomeState extends State<Home> {
                                               BorderRadius.circular(10.0),
                                           boxShadow: [
                                             if (selectedAccount ==
-                                                account.accountNumber)
+                                                account.account)
                                               const BoxShadow(
                                                 color: Colors.black,
                                                 offset: Offset(3.0, 3.0),
@@ -411,7 +356,7 @@ class _HomeState extends State<Home> {
                                                 spreadRadius: 1.0,
                                               ),
                                             if (selectedAccount ==
-                                                account.accountNumber)
+                                                account.account)
                                               const BoxShadow(
                                                 color: Colors.white,
                                                 offset: Offset(0.0, 0.0),
@@ -617,58 +562,71 @@ class _HomeState extends State<Home> {
                         TransactionDetails transaction = transactionList[index];
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(5.0),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      SizedBox(
-                                        width: 220,
-                                        child: Text(
-                                          transaction.description,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w400,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      Text(
-                                        transaction.date,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w300,
-                                        ),
-                                      ),
-                                    ],
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => EditTransactionPage(
+                                    transactionDetails: transaction,
                                   ),
-                                  SizedBox(
-                                    width: 100,
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: Text(
-                                        '${transaction.type == "INCOME" || transaction.type == "REFUND" ? "+" : "-"}${transaction.currency} ${_formatAmount(transaction.amount)}',
-                                        style: TextStyle(
-                                            color: transaction.type ==
-                                                        "INCOME" ||
-                                                    transaction.type == "REFUND"
-                                                ? Colors.green
-                                                : Colors.red),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(5.0),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        SizedBox(
+                                          width: 220,
+                                          child: Text(
+                                            transaction.description,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Text(
+                                          transaction.date,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w300,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(
+                                      width: 100,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Text(
+                                          '${transaction.type == "INCOME" || transaction.type == "REFUND" ? "+" : "-"}${transaction.currency} ${_formatAmount(transaction.amount)}',
+                                          style: TextStyle(
+                                              color: transaction.type ==
+                                                          "INCOME" ||
+                                                      transaction.type ==
+                                                          "REFUND"
+                                                  ? Colors.green
+                                                  : Colors.red),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),

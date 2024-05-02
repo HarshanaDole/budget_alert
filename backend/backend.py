@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
 import re
 import firebase_admin
+import uuid
 from firebase_admin import credentials, firestore
 from datetime import datetime
+
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate("config/budget-alert-20ced-firebase-adminsdk-pdxdj-dc2b845c25.json")
@@ -17,8 +19,9 @@ def receive_sms():
     sms_body = data.get('smsBody')  # Extract the SMS body from the request
     bank = data.get('bank')
     date = data.get('date')
+    uid = data.get('uid')
 
-    transaction_details = extract_transaction_details(sms_body, bank, date)
+    transaction_details = extract_transaction_details(sms_body, bank, date, uid)
     
     print("Transaction Details:", transaction_details)
 
@@ -50,7 +53,7 @@ def format_date(date_string):
 
     return formatted_date
 
-def extract_transaction_details(sms_body, bank, date):
+def extract_transaction_details(sms_body, bank, date, uid):
     transaction_details = {}
     if bank == 'COMBANK':
         if re.search('Purchase at', sms_body):
@@ -64,6 +67,7 @@ def extract_transaction_details(sms_body, bank, date):
             transaction_details['date'] = format_date(date_string)
             card = re.findall('#(\d{4})', sms_body)[0]
             transaction_details['account'] = find_account_by_card(card)
+            transaction_details['uid'] = uid
 
         if re.search('Credit for', sms_body):
             transaction_details['type'] = 'INCOME'
@@ -74,7 +78,9 @@ def extract_transaction_details(sms_body, bank, date):
             branch_name = re.findall('at (\D+)', sms_body)[0]
             transaction_details['description'] = f'Credit from {branch_name}'
             transaction_details['date'] = format_date(date)
-            transaction_details['account'] = re.findall('to (\d+) at', sms_body)[0]
+            account_number = re.findall('to (\d+) at', sms_body)[0]
+            transaction_details['account'] = find_account_by_acc_number(account_number)
+            transaction_details['uid'] = uid
 
         if re.search('CRM Deposit|CRC Deposit', sms_body):
             transaction_details['type'] = 'INCOME'
@@ -87,6 +93,7 @@ def extract_transaction_details(sms_body, bank, date):
             transaction_details['date'] = format_date(date)
             account_string = re.findall('account\s[\d*Xx]+(\d{4})', sms_body)[0]
             transaction_details['account'] = find_account_by_last_four_digits(account_string)
+            transaction_details['uid'] = uid
 
         if re.search('Withdrawal at', sms_body):
             transaction_details['type'] = 'ATM Withdrawal'
@@ -100,12 +107,13 @@ def extract_transaction_details(sms_body, bank, date):
             transaction_details['date'] = format_date(date_string)
             card = re.findall('#(\d{4})', sms_body)[0]
             transaction_details['account'] = find_account_by_card(card)
+            transaction_details['uid'] = uid
 
     return transaction_details
 
 def is_duplicate_transaction(transaction_details):
     # Check if a similar transaction already exists
-    transactions_ref = db.collection('transactions').where('description', '==', transaction_details['description']).where('amount', '==', transaction_details['amount']).where('date', '==', transaction_details['date']).limit(1).get()
+    transactions_ref = db.collection('transactions').where('description', '==', transaction_details['description']).where('amount', '==', transaction_details['amount']).where('date', '==', transaction_details['date']).where('uid', '==', transaction_details['uid']).limit(1).get()
     return len(transactions_ref) > 0
 
 def delete_existing_transactions():
@@ -117,16 +125,23 @@ def delete_existing_transactions():
 def find_account_by_card(card_number):
     accounts_ref = db.collection('accounts').where('cardNumber', '==', card_number).limit(1).get()
     for account in accounts_ref:
-        return account.to_dict()['accountNumber']
+        return account.to_dict()['account']
     return None
 
 def find_account_by_last_four_digits(last_digits):
     accounts_ref = db.collection('accounts').where('lastFourDigits', '==', last_digits).limit(1).get()
     for account in accounts_ref:
-        return account.to_dict()['accountNumber']
+        return account.to_dict()['account']
+    return None
+
+def find_account_by_acc_number(acc_number):
+    accounts_ref = db.collection('accounts').where('accountNumber', '==', acc_number).limit(1).get()
+    for account in accounts_ref:
+        return account.to_dict()['account']
     return None
 
 def store_transaction_details(transaction_details):
+    transaction_details['transaction_id'] = str(uuid.uuid4())
     db.collection('transactions').add(transaction_details)
 
 if __name__ == '__main__':

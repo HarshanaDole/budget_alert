@@ -7,18 +7,18 @@ import 'widgets/dropdownfield.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:uuid/uuid.dart';
 
-class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key});
+class EditTransactionPage extends StatefulWidget {
+  final TransactionDetails transactionDetails;
+
+  const EditTransactionPage({Key? key, required this.transactionDetails})
+      : super(key: key);
 
   @override
-  State<AddTransactionPage> createState() => _AddTransactionPageState();
+  State<EditTransactionPage> createState() => _EditTransactionPageState();
 }
 
-class _AddTransactionPageState extends State<AddTransactionPage> {
-  final _uuid = Uuid();
-
+class _EditTransactionPageState extends State<EditTransactionPage> {
   List typeOptions = [
     'EXPENSE',
     'INCOME',
@@ -69,6 +69,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   late Stream<List<String>> accountOptionsStream;
 
+  String selectedAccount = 'Cash';
+  String selectedType = 'EXPENSE';
+
   @override
   void initState() {
     super.initState();
@@ -85,8 +88,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             .toSet()
             .toList());
 
-    DateTime currentDate = DateTime.now();
-    _dateController.text = 'Today ${DateFormat('HH:mm').format(currentDate)}';
+    _descController.text = widget.transactionDetails.description;
+    _dateController.text = widget.transactionDetails.date;
+    _amountController.text = widget.transactionDetails.amount.toString();
+    selectedAccount = widget.transactionDetails.account;
+    selectedType = widget.transactionDetails.type;
   }
 
   bool isSameDay(DateTime date1, DateTime date2) {
@@ -95,8 +101,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         date1.day == date2.day;
   }
 
-  String selectedAccount = 'Cash';
-  String selectedType = 'EXPENSE';
   final _descController = TextEditingController();
   final _dateController = TextEditingController();
   final _amountController = TextEditingController();
@@ -116,7 +120,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Add Transaction'),
+        title: Text('Edit Transaction'),
         centerTitle: true,
         backgroundColor: AppColors.MainColor,
         foregroundColor: Colors.white,
@@ -137,6 +141,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               accountOptions = accountOptions
                   .map((option) => option.startsWith('Cash') ? 'Cash' : option)
                   .toList();
+              print('Account Options: $accountOptions');
 
               return Form(
                 key: _formKey,
@@ -238,45 +243,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     const SizedBox(height: 30.0),
                     CustomButton(onPress: () async {
                       if (_formKey.currentState!.validate()) {
-                        String transactionId = _uuid.v4();
-                        String account = selectedAccount;
-
-                        transactionDetails.account = account;
-                        transactionDetails.type = selectedType;
-                        transactionDetails.description = _descController.text;
-                        transactionDetails.date = _dateController.text;
-                        transactionDetails.amount =
-                            double.parse(_amountController.text);
-
-                        String formattedDateForFirestore =
-                            transactionDetails.date;
-
-                        if (formattedDateForFirestore.startsWith('Today')) {
-                          formattedDateForFirestore =
-                              DateFormat('yyyy-MM-dd HH:mm')
-                                  .format(DateTime.now());
-                        }
-
-                        try {
-                          String? uid = FirebaseAuth.instance.currentUser?.uid;
-
-                          await FirebaseFirestore.instance
-                              .collection('transactions')
-                              .add({
-                            'transaction_id': transactionId,
-                            'account': transactionDetails.account,
-                            'type': transactionDetails.type,
-                            'description': transactionDetails.description,
-                            'date': formattedDateForFirestore,
-                            'currency': 'LKR',
-                            'amount': transactionDetails.amount,
-                            'uid': uid,
-                          });
-
-                          Navigator.pop(context);
-                        } catch (e) {
-                          print('Error saving transaction: $e');
-                        }
+                        // Implement your save logic here
                       }
                     }),
                   ],

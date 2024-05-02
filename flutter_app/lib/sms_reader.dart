@@ -4,7 +4,7 @@ import 'dart:convert';
 
 class SmsReader {
   static Future<void> readAndSendMessages(List<String> senderIds,
-      Set<String> accountNums, Set<String> lastCardNums) async {
+      Set<String> accountNums, Set<String> lastCardNums, String? uid) async {
     SmsQuery query = SmsQuery();
 
     try {
@@ -31,7 +31,7 @@ class SmsReader {
 
         //send each message to the backend
         for (SmsMessage message in messages) {
-          await sendToBackend(message, senderId);
+          await sendToBackend(message, senderId, uid);
         }
       }
     } catch (e) {
@@ -80,17 +80,22 @@ class SmsReader {
           }
         }
       }
+      if (senderId == 'NSB') {
+        if (body.contains('AC')) return true;
+      }
     }
     return false;
   }
 
-  static Future<void> sendToBackend(SmsMessage message, String senderId) async {
+  static Future<void> sendToBackend(
+      SmsMessage message, String senderId, String? uid) async {
     // print('Sending message to backend: ${message.body}');
 
     Map<String, dynamic> requestBody = {
       'smsBody': message.body,
       'bank': senderId,
       'date': message.date!.toIso8601String(),
+      'uid': uid,
     };
 
     Uri uri = Uri.parse('http://192.168.8.176:5000/receive_sms');

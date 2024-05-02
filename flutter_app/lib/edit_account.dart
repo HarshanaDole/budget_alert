@@ -1,3 +1,4 @@
+import 'package:budget_alert/widgets/deletebutton.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,6 +17,7 @@ class EditAccountPage extends StatefulWidget {
 }
 
 class _EditAccountPageState extends State<EditAccountPage> {
+  List bankOptions = [];
   late String selectedBank;
   final TextEditingController _accController = TextEditingController();
   final TextEditingController _cardController = TextEditingController();
@@ -25,10 +27,38 @@ class _EditAccountPageState extends State<EditAccountPage> {
   @override
   void initState() {
     super.initState();
+    fetchBankOptions();
     selectedBank = widget.accountDetails.bankName;
     _accController.text = widget.accountDetails.accountNumber;
     _cardController.text = widget.accountDetails.cardNumber;
     _balController.text = widget.accountDetails.balance.toString();
+  }
+
+  Future<void> fetchBankOptions() async {
+    try {
+      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+          await FirebaseFirestore.instance.collection('banks').get();
+
+      List<String> banks =
+          querySnapshot.docs.map((doc) => doc.get('name') as String).toList();
+
+      if (widget.accountDetails.bankName != "Cash") {
+        banks.remove("Cash");
+      }
+
+      banks.sort((a, b) {
+        if (a == widget.accountDetails.bankName) return -1;
+        if (b == widget.accountDetails.bankName) return 1;
+        return a.compareTo(b);
+      });
+
+      setState(() {
+        bankOptions = banks;
+        selectedBank = banks.isNotEmpty ? widget.accountDetails.bankName : '';
+      });
+    } catch (e) {
+      print('Error fetching bank options: $e');
+    }
   }
 
   @override
@@ -48,45 +78,47 @@ class _EditAccountPageState extends State<EditAccountPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: 16.0),
-              CustomDropdownField(
-                labelText: 'Bank',
-                value: selectedBank,
-                options: [
-                  'Bank A',
-                  'Bank B',
-                  'Bank C'
-                ], // Add your bank options here
-                onChanged: (newBank) {
-                  setState(() {
-                    selectedBank = newBank.toString();
-                  });
-                },
-              ),
+              if (selectedBank == "Cash")
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    "Cash",
+                    style: TextStyle(fontSize: 16.0),
+                  ),
+                ),
               SizedBox(height: 16.0),
-              TextFormField(
-                controller: _accController,
-                decoration: InputDecoration(labelText: 'Account Number'),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter account number';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16.0),
-              TextFormField(
-                controller: _cardController,
-                decoration: InputDecoration(labelText: 'Last 4 Digits of Card'),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter the last 4 digits of the card';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16.0),
+              if (selectedBank != "Cash") ...[
+                TextFormField(
+                  controller: TextEditingController(
+                      text: widget.accountDetails.accountNumber),
+                  enabled: false,
+                  decoration: InputDecoration(labelText: 'Account Number'),
+                ),
+                CustomDropdownField(
+                  labelText: 'Bank',
+                  value: selectedBank,
+                  options: bankOptions,
+                  onChanged: (newBank) {
+                    setState(() {
+                      selectedBank = newBank.toString();
+                    });
+                  },
+                ),
+                SizedBox(height: 16.0),
+                TextFormField(
+                  controller: _cardController,
+                  decoration:
+                      InputDecoration(labelText: 'Last 4 Digits of Card'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter the last 4 digits of the card';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 16.0),
+              ],
               TextFormField(
                 controller: _balController,
                 decoration: InputDecoration(labelText: 'Current Balance'),
@@ -102,26 +134,118 @@ class _EditAccountPageState extends State<EditAccountPage> {
               CustomButton(
                 onPress: () async {
                   if (_formKey.currentState!.validate()) {
+                    String fullAccountNumber = _accController.text;
+                    String lastFourDigits = fullAccountNumber.length > 4
+                        ? fullAccountNumber
+                            .substring(fullAccountNumber.length - 4)
+                        : fullAccountNumber;
                     AccountDetails updatedAccountDetails = AccountDetails(
                       bankName: selectedBank,
                       accountNumber: _accController.text,
+                      lastFourDigits: lastFourDigits,
                       cardNumber: _cardController.text,
                       balance: double.parse(_balController.text),
                       uid: FirebaseAuth.instance.currentUser!.uid,
                     );
 
                     try {
-                      await FirebaseFirestore.instance
-                          .collection('accounts')
-                          .doc(widget.accountDetails.uid)
-                          .update(updatedAccountDetails.toJson());
-                      Navigator.pop(context);
+                      // find the document ID based on account number and UID
+                      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+                          await FirebaseFirestore.instance
+                              .collection('accounts')
+                              .where('accountNumber',
+                                  isEqualTo:
+                                      updatedAccountDetails.accountNumber)
+                              .where('uid',
+                                  isEqualTo: updatedAccountDetails.uid)
+                              .get();
+
+                      if (querySnapshot.size == 1) {
+                        String documentId = querySnapshot.docs[0].id;
+
+                        // update the document using its document ID
+                        await FirebaseFirestore.instance
+                            .collection('accounts')
+                            .doc(documentId)
+                            .update(updatedAccountDetails.toJson());
+
+                        // navigate back
+                        Navigator.pop(context);
+                      } else {
+                        // either no matching document or multiple matching documents
+                        print(
+                            'Error: Document not found or multiple documents found');
+                      }
                     } catch (e) {
                       print('Error updating account: $e');
                     }
                   }
                 },
               ),
+              SizedBox(height: 32.0),
+              if (selectedBank != "Cash")
+                DeleteButton(
+                  onPress: () async {
+                    // Show confirmation dialog
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text("Confirm Deletion"),
+                          content: Text(
+                              "Deleting an account will also remove all your transactions related to this account. Are you sure you want to delete this account?"),
+                          actions: <Widget>[
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop(); // Close the dialog
+                              },
+                              child: Text("Cancel"),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                try {
+                                  // Find the document ID based on account number and UID
+                                  QuerySnapshot<Map<String, dynamic>>
+                                      querySnapshot = await FirebaseFirestore
+                                          .instance
+                                          .collection('accounts')
+                                          .where('accountNumber',
+                                              isEqualTo: widget
+                                                  .accountDetails.accountNumber)
+                                          .where('uid',
+                                              isEqualTo: FirebaseAuth
+                                                  .instance.currentUser!.uid)
+                                          .get();
+
+                                  if (querySnapshot.size == 1) {
+                                    String documentId =
+                                        querySnapshot.docs[0].id;
+
+                                    // Delete the document using its document ID
+                                    await FirebaseFirestore.instance
+                                        .collection('accounts')
+                                        .doc(documentId)
+                                        .delete();
+
+                                    Navigator.pop(context); // Close the dialog
+                                    Navigator.pop(context); // Navigate back
+                                  } else {
+                                    // Handle the case of no matching document or multiple matching documents
+                                    print(
+                                        'Error: Document not found or multiple documents found');
+                                  }
+                                } catch (e) {
+                                  print('Error deleting account: $e');
+                                }
+                              },
+                              child: Text("Delete"),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
             ],
           ),
         ),

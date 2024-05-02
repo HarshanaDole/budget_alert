@@ -138,7 +138,10 @@ class _LoginPageState extends State<LoginPage> {
             'uid': user.uid,
             'bankName': 'Cash',
             'balance': 0,
-            'accountNumber': 0,
+            'accountNumber': '',
+            'account': 'Cash',
+            'lastFourDigits': '',
+            'cardNumber': '',
           });
         }
       }

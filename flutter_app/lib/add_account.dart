@@ -1,3 +1,4 @@
+import 'package:budget_alert/sms_reader.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,6 +7,8 @@ import 'package:budget_alert/components/app_colors.dart';
 import 'package:budget_alert/models/account_model.dart';
 import 'package:budget_alert/widgets/button.dart';
 import 'package:budget_alert/widgets/dropdownfield.dart';
+import 'package:budget_alert/components/message_utils.dart';
+import 'package:budget_alert/main.dart';
 
 class AddAccountPage extends StatefulWidget {
   @override
@@ -14,7 +17,7 @@ class AddAccountPage extends StatefulWidget {
 
 class _AddAccountPageState extends State<AddAccountPage> {
   List bankOptions = [];
-
+  String? senderId;
   String selectedBank = '';
 
   final _accController = TextEditingController();
@@ -22,6 +25,30 @@ class _AddAccountPageState extends State<AddAccountPage> {
   final _balController = TextEditingController();
 
   final _formKey = GlobalKey<FormState>();
+
+  String? userID;
+
+  Future<void> fetchSenderId(String bankName) async {
+    try {
+      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('banks')
+              .where('name', isEqualTo: bankName)
+              .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        DocumentSnapshot<Map<String, dynamic>> snapshot =
+            querySnapshot.docs.first;
+        setState(() {
+          senderId = snapshot.get('senderId');
+        });
+      } else {
+        print('Bank not found: $bankName');
+      }
+    } catch (e) {
+      print('Error fetching senderId: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -37,9 +64,15 @@ class _AddAccountPageState extends State<AddAccountPage> {
       List<String> banks =
           querySnapshot.docs.map((doc) => doc.get('name') as String).toList();
 
+      banks.removeWhere((bank) => bank == 'Cash');
+
+      if (!banks.contains(selectedBank)) {
+        selectedBank = banks.isNotEmpty ? banks.first : '';
+      }
+
       setState(() {
         bankOptions = banks;
-        selectedBank = bankOptions.isNotEmpty ? bankOptions[0] : '';
+        selectedBank = selectedBank;
       });
     } catch (e) {
       print('Error fetching bank options: $e');
@@ -116,6 +149,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
                 if (_formKey.currentState!.validate()) {
                   User? user = FirebaseAuth.instance.currentUser;
                   if (user != null) {
+                    String account = '${selectedBank} - ${_accController.text}';
                     String fullAccountNumber = _accController.text;
                     String lastFourDigits = fullAccountNumber.length > 4
                         ? fullAccountNumber
@@ -123,6 +157,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
                         : fullAccountNumber;
                     AccountDetails accountDetails = AccountDetails(
                       bankName: selectedBank,
+                      account: account,
                       accountNumber: _accController.text,
                       lastFourDigits: lastFourDigits,
                       cardNumber: _cardController.text,
@@ -131,10 +166,23 @@ class _AddAccountPageState extends State<AddAccountPage> {
                     );
 
                     try {
-                      await FirebaseFirestore.instance
-                          .collection('accounts')
-                          .add(accountDetails.toJson());
+                      await fetchSenderId(selectedBank);
 
+                      if (senderId != null) {
+                        DocumentReference newAccountRef =
+                            await FirebaseFirestore.instance
+                                .collection('accounts')
+                                .add(accountDetails.toJson());
+
+                        DocumentSnapshot newAccountSnapshot =
+                            await newAccountRef.get();
+
+                        String accountNum = newAccountSnapshot['accountNumber'];
+                        String lastCardNum = newAccountSnapshot['cardNumber'];
+
+                        await readMessages(
+                            [senderId!], {accountNum}, {lastCardNum}, user.uid);
+                      }
                       Navigator.pop(context);
                     } catch (e) {
                       print('error saving account: $e');
