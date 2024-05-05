@@ -45,6 +45,7 @@ dependencies:
   flutter_sms_inbox: ^1.0.3
   http: ^1.2.1
   uuid: ^4.4.0
+  telephony: ^0.2.0
 
 dev_dependencies:
   flutter_test:

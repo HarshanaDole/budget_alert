@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 class DeleteButton extends StatelessWidget {
-  const DeleteButton({super.key, required this.onPress});
+  const DeleteButton({super.key, required this.onPress, required this.buttonText});
 
   final VoidCallback onPress;
+  final String buttonText;
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +13,7 @@ class DeleteButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPress,
         child: Text(
-          'Delete Account'.toUpperCase(),
+          buttonText.toUpperCase(),
           style:
               const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
         ),

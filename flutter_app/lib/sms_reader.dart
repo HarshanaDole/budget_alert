@@ -1,19 +1,43 @@
-import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
+// import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:telephony/telephony.dart';
+
+final Telephony telephony = Telephony.instance;
 
 class SmsReader {
+  static void listenAndSendMessages(List<String> senderIds,
+      Set<String> accountNums, Set<String> lastCardNums, String? uid) {
+    // register listener for incoming SMS messages
+    telephony.listenIncomingSms(
+      onNewMessage: (SmsMessage message) async {
+        // handle each new message
+        if (senderIds.contains(message.address)) {
+          if (isTransactionMessage(
+              message, message.address!, accountNums, lastCardNums)) {
+            await sendToBackend(message, message.address!, uid);
+          }
+        }
+      },
+      onBackgroundMessage:
+          backgroundMessageHandler, // handle messages in background
+    );
+  }
+
+  static Future<void> backgroundMessageHandler(SmsMessage message) async {
+    print("Background Message: ${message.body}");
+    print("Syncing message data with backend...");
+  }
+
   static Future<void> readAndSendMessages(List<String> senderIds,
       Set<String> accountNums, Set<String> lastCardNums, String? uid) async {
-    SmsQuery query = SmsQuery();
-
     try {
       // iterate over each selected senderId
       for (String senderId in senderIds) {
         // read messages for the current senderId
-        List<SmsMessage> messages = await query.querySms(
-          address: senderId,
-          kinds: [SmsQueryKind.inbox],
+        List<SmsMessage> messages = await telephony.getInboxSms(
+          columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+          filter: SmsFilter.where(SmsColumn.ADDRESS).equals(senderId),
         );
 
         // filter out non transaction messages
@@ -57,7 +81,7 @@ class SmsReader {
     // print(accountNums);
     // print(lastCardNums);
     Set<String> lastFourDigits = getLastFourDigits(accountNums);
-    print(lastFourDigits);
+    // print(lastFourDigits);
 
     String? body = message.body;
     RegExp regex = RegExp(
@@ -80,9 +104,9 @@ class SmsReader {
           }
         }
       }
-      if (senderId == 'NSB') {
-        if (body.contains('AC')) return true;
-      }
+      // if (senderId == 'NSB') {
+      //   if (body.contains('AC')) return true;
+      // }
     }
     return false;
   }
@@ -91,10 +115,14 @@ class SmsReader {
       SmsMessage message, String senderId, String? uid) async {
     // print('Sending message to backend: ${message.body}');
 
+    DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(message.date!);
+
+    String date = dateTime.toIso8601String();
+
     Map<String, dynamic> requestBody = {
       'smsBody': message.body,
       'bank': senderId,
-      'date': message.date!.toIso8601String(),
+      'date': date,
       'uid': uid,
     };
 

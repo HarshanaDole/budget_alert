@@ -88,109 +88,114 @@ class _AddAccountPageState extends State<AddAccountPage> {
         backgroundColor: AppColors.MainColor,
         foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(height: 16.0),
-              CustomDropdownField(
-                  labelText: 'Bank',
-                  value: selectedBank,
-                  options: bankOptions,
-                  onChanged: (newBank) {
-                    setState(() {
-                      selectedBank = newBank;
-                    });
-                  }),
-              SizedBox(height: 16.0),
-              TextFormField(
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter account number';
-                  } else {
-                    return null;
-                  }
-                },
-                controller: _accController,
-                decoration: InputDecoration(labelText: 'Account Number'),
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 16.0),
-              TextFormField(
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter the last 4 digits of the card';
-                  } else {
-                    return null;
-                  }
-                },
-                controller: _cardController,
-                decoration: InputDecoration(labelText: 'Last 4 Digits of Card'),
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 16.0),
-              TextFormField(
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter the current balance';
-                  } else {
-                    return null;
-                  }
-                },
-                controller: _balController,
-                decoration: InputDecoration(labelText: 'Current Balance'),
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 32.0),
-              CustomButton(onPress: () async {
-                if (_formKey.currentState!.validate()) {
-                  User? user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    String account = '${selectedBank} - ${_accController.text}';
-                    String fullAccountNumber = _accController.text;
-                    String lastFourDigits = fullAccountNumber.length > 4
-                        ? fullAccountNumber
-                            .substring(fullAccountNumber.length - 4)
-                        : fullAccountNumber;
-                    AccountDetails accountDetails = AccountDetails(
-                      bankName: selectedBank,
-                      account: account,
-                      accountNumber: _accController.text,
-                      lastFourDigits: lastFourDigits,
-                      cardNumber: _cardController.text,
-                      balance: double.parse(_balController.text),
-                      uid: user.uid,
-                    );
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: 16.0),
+                CustomDropdownField(
+                    labelText: 'Bank',
+                    value: selectedBank,
+                    options: bankOptions,
+                    onChanged: (newBank) {
+                      setState(() {
+                        selectedBank = newBank;
+                      });
+                    }),
+                SizedBox(height: 16.0),
+                TextFormField(
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter account number';
+                    } else {
+                      return null;
+                    }
+                  },
+                  controller: _accController,
+                  decoration: InputDecoration(labelText: 'Account Number'),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 16.0),
+                TextFormField(
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter the last 4 digits of the card';
+                    } else {
+                      return null;
+                    }
+                  },
+                  controller: _cardController,
+                  decoration:
+                      InputDecoration(labelText: 'Last 4 Digits of Card'),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 16.0),
+                TextFormField(
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter the current balance';
+                    } else {
+                      return null;
+                    }
+                  },
+                  controller: _balController,
+                  decoration: InputDecoration(labelText: 'Current Balance'),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 32.0),
+                CustomButton(onPress: () async {
+                  if (_formKey.currentState!.validate()) {
+                    User? user = FirebaseAuth.instance.currentUser;
+                    if (user != null) {
+                      String account =
+                          '${selectedBank} - ${_accController.text}';
+                      String fullAccountNumber = _accController.text;
+                      String lastFourDigits = fullAccountNumber.length > 4
+                          ? fullAccountNumber
+                              .substring(fullAccountNumber.length - 4)
+                          : fullAccountNumber;
+                      AccountDetails accountDetails = AccountDetails(
+                        bankName: selectedBank,
+                        account: account,
+                        accountNumber: _accController.text,
+                        lastFourDigits: lastFourDigits,
+                        cardNumber: _cardController.text,
+                        balance: double.parse(_balController.text),
+                        uid: user.uid,
+                      );
 
-                    try {
-                      await fetchSenderId(selectedBank);
+                      try {
+                        await fetchSenderId(selectedBank);
 
-                      if (senderId != null) {
-                        DocumentReference newAccountRef =
-                            await FirebaseFirestore.instance
-                                .collection('accounts')
-                                .add(accountDetails.toJson());
+                        if (senderId != null) {
+                          DocumentReference newAccountRef =
+                              await FirebaseFirestore.instance
+                                  .collection('accounts')
+                                  .add(accountDetails.toJson());
 
-                        DocumentSnapshot newAccountSnapshot =
-                            await newAccountRef.get();
+                          DocumentSnapshot newAccountSnapshot =
+                              await newAccountRef.get();
 
-                        String accountNum = newAccountSnapshot['accountNumber'];
-                        String lastCardNum = newAccountSnapshot['cardNumber'];
+                          String accountNum =
+                              newAccountSnapshot['accountNumber'];
+                          String lastCardNum = newAccountSnapshot['cardNumber'];
 
-                        await readMessages(
-                            [senderId!], {accountNum}, {lastCardNum}, user.uid);
+                          await readMessages(context, [senderId!], {accountNum},
+                              {lastCardNum}, user.uid);
+                        }
+                        Navigator.pop(context);
+                      } catch (e) {
+                        print('error saving account: $e');
                       }
-                      Navigator.pop(context);
-                    } catch (e) {
-                      print('error saving account: $e');
                     }
                   }
-                }
-              }),
-            ],
+                }),
+              ],
+            ),
           ),
         ),
       ),

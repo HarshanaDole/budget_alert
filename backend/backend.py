@@ -112,12 +112,15 @@ def extract_transaction_details(sms_body, bank, date, uid):
     return transaction_details
 
 def is_duplicate_transaction(transaction_details):
-    # Check if a similar transaction already exists
-    transactions_ref = db.collection('transactions').where('description', '==', transaction_details['description']).where('amount', '==', transaction_details['amount']).where('date', '==', transaction_details['date']).where('uid', '==', transaction_details['uid']).limit(1).get()
+    # check if a similar transaction already exists
+    transactions_ref = db.collection('transactions')\
+        .where('date', '==', transaction_details['date'])\
+        .where('uid', '==', transaction_details['uid'])\
+        .limit(1).get()
     return len(transactions_ref) > 0
 
 def delete_existing_transactions():
-    # Delete all existing transactions
+    # delete all existing transactions
     transactions_ref = db.collection('transactions').get()
     for transaction in transactions_ref:
         db.collection('transactions').document(transaction.id).delete()

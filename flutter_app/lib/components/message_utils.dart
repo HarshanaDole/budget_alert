@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 String? userID;
 final Map<String, DocumentSnapshot> _bankDataCache = {};
+bool permissionDialogShown = false;
 
 Future<DocumentSnapshot> getBankData(String bankName) async {
   if (_bankDataCache.containsKey(bankName)) {
@@ -21,10 +22,48 @@ Future<DocumentSnapshot> getBankData(String bankName) async {
   }
 }
 
-Future<void> checkPermission() async {
+Future<bool> checkPermission(BuildContext context) async {
   final status = await Permission.sms.status;
   if (!status.isGranted) {
-    await Permission.sms.request();
+    // Show dialog and wait for user interaction
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permission Required'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This app requires access to your SMS messages to scan for transaction information. This information is used to provide financial insights and manage transactions.',
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Would you like to grant access to your SMS messages?',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Permission.sms.request();
+              Navigator.pop(context, true);
+            },
+            child: Text('Agree'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
+            child: Text('Skip'),
+          ),
+        ],
+      ),
+    );
+    permissionDialogShown = true;
+    return result ?? false;
+  } else {
+    return true;
   }
 }
 
@@ -73,35 +112,23 @@ Future<Map<String, Set<dynamic>>> fetchSenderIds() async {
   return senderIdsAndDigits;
 }
 
-Future<void> readMessages(List<String> senderIds, Set<String> accountNums,
-    Set<String> lastCardNums, userID) async {
-  try {
-    await SmsReader.readAndSendMessages(
-        senderIds, accountNums, lastCardNums, userID);
-  } catch (e) {
-    print('Error reading and sending SMS: $e');
+Future<void> readMessages(context, List<String> senderIds,
+    Set<String> accountNums, Set<String> lastCardNums, userID) async {
+  final permissionGranted = await checkPermission(context);
+  if (permissionGranted) {
+    try {
+      await SmsReader.readAndSendMessages(
+          senderIds, accountNums, lastCardNums, userID);
+    } catch (e) {
+      print('Error reading and sending SMS: $e');
+    }
   }
 }
 
 Future<void> rescan(BuildContext context, List<String> senderIds,
     Set<String> accountNums, Set<String> lastCardNums, String? userID) async {
-  final permissionStatus = await Permission.sms.status;
-  if (permissionStatus.isGranted) {
-    readMessages(senderIds, accountNums, lastCardNums, userID);
-  } else {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Permission Required'),
-        content: Text(
-            'Please grant SMS permission from settings to rescan messages.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
-          ),
-        ],
-      ),
-    );
+  final permissionGranted = await checkPermission(context);
+  if (permissionGranted) {
+    readMessages(context, senderIds, accountNums, lastCardNums, userID);
   }
 }

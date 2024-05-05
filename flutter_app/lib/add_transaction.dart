@@ -121,169 +121,173 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         backgroundColor: AppColors.MainColor,
         foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
-        child: StreamBuilder<List<String>>(
-          stream: accountOptionsStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            } else {
-              List<String> accountOptions = snapshot.data ?? [];
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+          child: StreamBuilder<List<String>>(
+            stream: accountOptionsStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              } else {
+                List<String> accountOptions = snapshot.data ?? [];
 
-              //remove account num from Cash account
-              accountOptions = accountOptions
-                  .map((option) => option.startsWith('Cash') ? 'Cash' : option)
-                  .toList();
+                //remove account num from Cash account
+                accountOptions = accountOptions
+                    .map(
+                        (option) => option.startsWith('Cash') ? 'Cash' : option)
+                    .toList();
 
-              return Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20.0),
-                    CustomDropdownField(
-                        labelText: 'Account',
-                        value: selectedAccount,
-                        options: accountOptions,
-                        onChanged: (newAcc) {
-                          setState(() {
-                            selectedAccount = newAcc;
-                          });
-                        }),
-                    const SizedBox(height: 8.0),
-                    CustomDropdownField(
-                        labelText: 'Type',
-                        value: selectedType,
-                        options: typeOptions,
-                        onChanged: (newType) {
-                          setState(() {
-                            selectedType = newType;
-                          });
-                        }),
-                    const SizedBox(height: 8.0),
-                    TextFormField(
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a description';
-                        } else {
-                          return null;
-                        }
-                      },
-                      controller: _descController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
+                return Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20.0),
+                      CustomDropdownField(
+                          labelText: 'Account',
+                          value: selectedAccount,
+                          options: accountOptions,
+                          onChanged: (newAcc) {
+                            setState(() {
+                              selectedAccount = newAcc;
+                            });
+                          }),
+                      const SizedBox(height: 8.0),
+                      CustomDropdownField(
+                          labelText: 'Type',
+                          value: selectedType,
+                          options: typeOptions,
+                          onChanged: (newType) {
+                            setState(() {
+                              selectedType = newType;
+                            });
+                          }),
+                      const SizedBox(height: 8.0),
+                      TextFormField(
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a description';
+                          } else {
+                            return null;
+                          }
+                        },
+                        controller: _descController,
+                        decoration: const InputDecoration(
+                          labelText: 'Description',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8.0),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.only(right: 16.0, top: 16.0),
-                            child: TextField(
-                              controller: _dateController,
-                              style: const TextStyle(fontSize: 12),
-                              decoration: InputDecoration(
-                                labelText: 'Date & Time',
-                                prefixIcon: Icon(
-                                  Icons.calendar_today,
+                      const SizedBox(height: 8.0),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(right: 16.0, top: 16.0),
+                              child: TextField(
+                                controller: _dateController,
+                                style: const TextStyle(fontSize: 12),
+                                decoration: InputDecoration(
+                                  labelText: 'Date & Time',
+                                  prefixIcon: Icon(
+                                    Icons.calendar_today,
+                                  ),
+                                  contentPadding: EdgeInsets.zero,
+                                  focusedBorder: InputBorder.none,
+                                  enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide.none),
+                                  floatingLabelBehavior:
+                                      _dateController.text.isNotEmpty
+                                          ? FloatingLabelBehavior.never
+                                          : FloatingLabelBehavior.auto,
                                 ),
-                                contentPadding: EdgeInsets.zero,
-                                focusedBorder: InputBorder.none,
-                                enabledBorder: OutlineInputBorder(
-                                    borderSide: BorderSide.none),
-                                floatingLabelBehavior:
-                                    _dateController.text.isNotEmpty
-                                        ? FloatingLabelBehavior.never
-                                        : FloatingLabelBehavior.auto,
-                              ),
-                              readOnly: true,
-                              onTap: () {
-                                _selectDateAndTime();
-                              },
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 16.0),
-                            child: TextFormField(
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter the amount';
-                                } else {
-                                  return null;
-                                }
-                              },
-                              controller: _amountController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
-                              decoration: InputDecoration(
-                                labelText: 'Amount',
-                                floatingLabelBehavior:
-                                    _amountController.text.isNotEmpty
-                                        ? FloatingLabelBehavior.never
-                                        : FloatingLabelBehavior.auto,
+                                readOnly: true,
+                                onTap: () {
+                                  _selectDateAndTime();
+                                },
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 30.0),
-                    CustomButton(onPress: () async {
-                      if (_formKey.currentState!.validate()) {
-                        String transactionId = _uuid.v4();
-                        String account = selectedAccount;
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 16.0),
+                              child: TextFormField(
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter the amount';
+                                  } else {
+                                    return null;
+                                  }
+                                },
+                                controller: _amountController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Amount',
+                                  floatingLabelBehavior:
+                                      _amountController.text.isNotEmpty
+                                          ? FloatingLabelBehavior.never
+                                          : FloatingLabelBehavior.auto,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 30.0),
+                      CustomButton(onPress: () async {
+                        if (_formKey.currentState!.validate()) {
+                          String transactionId = _uuid.v4();
+                          String account = selectedAccount;
 
-                        transactionDetails.account = account;
-                        transactionDetails.type = selectedType;
-                        transactionDetails.description = _descController.text;
-                        transactionDetails.date = _dateController.text;
-                        transactionDetails.amount =
-                            double.parse(_amountController.text);
+                          transactionDetails.account = account;
+                          transactionDetails.type = selectedType;
+                          transactionDetails.description = _descController.text;
+                          transactionDetails.date = _dateController.text;
+                          transactionDetails.amount =
+                              double.parse(_amountController.text);
 
-                        String formattedDateForFirestore =
-                            transactionDetails.date;
+                          String formattedDateForFirestore =
+                              transactionDetails.date;
 
-                        if (formattedDateForFirestore.startsWith('Today')) {
-                          formattedDateForFirestore =
-                              DateFormat('yyyy-MM-dd HH:mm')
-                                  .format(DateTime.now());
+                          if (formattedDateForFirestore.startsWith('Today')) {
+                            formattedDateForFirestore =
+                                DateFormat('yyyy-MM-dd HH:mm')
+                                    .format(DateTime.now());
+                          }
+
+                          try {
+                            String? uid =
+                                FirebaseAuth.instance.currentUser?.uid;
+
+                            await FirebaseFirestore.instance
+                                .collection('transactions')
+                                .add({
+                              'transaction_id': transactionId,
+                              'account': transactionDetails.account,
+                              'type': transactionDetails.type,
+                              'description': transactionDetails.description,
+                              'date': formattedDateForFirestore,
+                              'currency': 'LKR',
+                              'amount': transactionDetails.amount,
+                              'uid': uid,
+                            });
+
+                            Navigator.pop(context);
+                          } catch (e) {
+                            print('Error saving transaction: $e');
+                          }
                         }
-
-                        try {
-                          String? uid = FirebaseAuth.instance.currentUser?.uid;
-
-                          await FirebaseFirestore.instance
-                              .collection('transactions')
-                              .add({
-                            'transaction_id': transactionId,
-                            'account': transactionDetails.account,
-                            'type': transactionDetails.type,
-                            'description': transactionDetails.description,
-                            'date': formattedDateForFirestore,
-                            'currency': 'LKR',
-                            'amount': transactionDetails.amount,
-                            'uid': uid,
-                          });
-
-                          Navigator.pop(context);
-                        } catch (e) {
-                          print('Error saving transaction: $e');
-                        }
-                      }
-                    }),
-                  ],
-                ),
-              );
-            }
-          },
+                      }),
+                    ],
+                  ),
+                );
+              }
+            },
+          ),
         ),
       ),
     );

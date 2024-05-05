@@ -1,25 +1,20 @@
 import 'dart:async';
+import 'package:budget_alert/components/customDrawer.dart';
 import 'package:budget_alert/components/message_utils.dart';
 import 'package:budget_alert/edit_transaction.dart';
 import 'package:budget_alert/test_sms_recieve.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:auto_size_text/auto_size_text.dart';
-import 'package:flutter/widgets.dart';
 import 'package:budget_alert/add_account.dart';
 import 'package:budget_alert/add_transaction.dart';
 import 'package:budget_alert/login.dart';
 import 'package:budget_alert/models/account_model.dart';
-import 'package:budget_alert/registration.dart';
-import 'package:budget_alert/sms_reader.dart';
 import 'package:budget_alert/edit_account.dart';
 import 'components/app_colors.dart';
 import 'models/transaction_model.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 
 void main() async {
@@ -49,11 +44,15 @@ class _HomeState extends State<Home> {
   late Stream<List<AccountDetails>> accounts;
   late StreamController<List<TransactionDetails>> _transactionStreamController;
 
+  double totalBalance = 0.0;
+
   String selectedAccount = 'Cash';
 
   List<String> senderIds = [];
   Set<String> accountNums = {};
   Set<String> lastCardNums = {};
+
+  bool permissionDialogShown = false;
 
   @override
   void initState() {
@@ -97,14 +96,41 @@ class _HomeState extends State<Home> {
       lastCardNums =
           senderIdsAndDigits['lastCardNums']!.map((e) => e as String).toSet();
 
-      readMessages(senderIds, accountNums, lastCardNums, userID);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        readMessages(context, senderIds, accountNums, lastCardNums, userID);
+      });
     });
+
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   if (!permissionDialogShown) {
+    //     checkPermission(context);
+    //   }
+    // });
   }
 
   @override
   void dispose() {
     _transactionStreamController.close();
     super.dispose();
+  }
+
+  Stream<double> getTotalBalanceStream() {
+    return FirebaseFirestore.instance
+        .collection('accounts')
+        .where('uid', isEqualTo: userID)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.fold<double>(0.0, (previousValue, doc) {
+        var balance = doc['balance'];
+        if (balance is int) {
+          return previousValue + balance.toDouble();
+        } else if (balance is double) {
+          return previousValue + balance;
+        } else {
+          return previousValue;
+        }
+      });
+    });
   }
 
   void _fetchTransactions(String acccountNumber, String userID) {
@@ -140,22 +166,34 @@ class _HomeState extends State<Home> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Total Balance',
                           style: TextStyle(
                               color: Colors.white, fontWeight: FontWeight.w300),
                         ),
-                        Text(
-                          'LKR 150,000.00',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500),
+                        StreamBuilder<double>(
+                          stream: getTotalBalanceStream(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const CircularProgressIndicator();
+                            } else if (snapshot.hasError) {
+                              return Text('Error: ${snapshot.error}');
+                            } else {
+                              return Text(
+                                'LKR ${snapshot.data!.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w500),
+                              );
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -166,10 +204,8 @@ class _HomeState extends State<Home> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            checkPermission().then((_) {
-                              rescan(context, senderIds, accountNums,
-                                  lastCardNums, userID);
-                            });
+                            rescan(context, senderIds, accountNums,
+                                lastCardNums, userID);
                           },
                           icon: const Icon(
                             Icons.refresh,
@@ -179,14 +215,7 @@ class _HomeState extends State<Home> {
                           tooltip: 'Rescan',
                         ),
                         IconButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SmsReaderPage(),
-                              ),
-                            );
-                          },
+                          onPressed: () {},
                           icon: const Icon(
                             Icons.search_rounded,
                             color: Colors.white,
@@ -202,27 +231,7 @@ class _HomeState extends State<Home> {
           ),
         ),
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: AppColors.SubColor,
-              ),
-              child: Text('Menu'),
-            ),
-            ListTile(
-              title: Text('Logout'),
-              onTap: () {
-                FirebaseAuth.instance.signOut();
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (context) => LoginPage()));
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: CustomDrawer(),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
         child: Column(
@@ -287,8 +296,7 @@ class _HomeState extends State<Home> {
                                         TextButton(
                                           child: Text('Edit'),
                                           onPressed: () {
-                                            Navigator.of(context)
-                                                .pop(); // Close the dialog
+                                            Navigator.of(context).pop();
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -589,7 +597,7 @@ class _HomeState extends State<Home> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         SizedBox(
-                                          width: 220,
+                                          width: 200,
                                           child: Text(
                                             transaction.description,
                                             style: const TextStyle(

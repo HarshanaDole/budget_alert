@@ -1,5 +1,5 @@
 class TransactionDetails {
-  late String transactionId;
+  late String transaction_id;
   late String description;
   late String account;
   late String type;
@@ -9,7 +9,7 @@ class TransactionDetails {
   late String uid;
 
   TransactionDetails({
-    this.transactionId = '',
+    this.transaction_id = '',
     this.account = '',
     this.type = '',
     this.description = '',
@@ -21,7 +21,7 @@ class TransactionDetails {
 
   factory TransactionDetails.fromMap(Map<String, dynamic> map) {
     return TransactionDetails(
-      transactionId: map['transactionId'] ?? '',
+      transaction_id: map['transaction_id'] ?? '',
       account: map['account'] ?? '',
       type: map['type'] ?? '',
       description: map['description'] ?? '',
@@ -32,9 +32,9 @@ class TransactionDetails {
     );
   }
 
-  Map<String, dynamic> toJason() {
+  Map<String, dynamic> toJson() {
     return {
-      'transaction_id': transactionId,
+      'transaction_id': transaction_id,
       'account': account,
       'type': type,
       'description': description,
