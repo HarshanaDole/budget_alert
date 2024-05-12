@@ -6,7 +6,6 @@ import 'components/app_colors.dart';
 import 'widgets/dropdownfield.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:uuid/uuid.dart';
 
 class AddTransactionPage extends StatefulWidget {

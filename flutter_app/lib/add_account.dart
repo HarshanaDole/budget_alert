@@ -1,14 +1,11 @@
-import 'package:budget_alert/sms_reader.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:budget_alert/components/app_colors.dart';
 import 'package:budget_alert/models/account_model.dart';
 import 'package:budget_alert/widgets/button.dart';
 import 'package:budget_alert/widgets/dropdownfield.dart';
 import 'package:budget_alert/components/message_utils.dart';
-import 'package:budget_alert/main.dart';
 
 class AddAccountPage extends StatefulWidget {
   @override

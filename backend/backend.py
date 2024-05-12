@@ -6,7 +6,7 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 
 
-# Initialize Firebase Admin SDK
+#initialize firebase admin SDK
 cred = credentials.Certificate("config/budget-alert-20ced-firebase-adminsdk-pdxdj-dc2b845c25.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -16,7 +16,7 @@ app = Flask(__name__)
 @app.route('/receive_sms', methods=['POST'])
 def receive_sms():
     data = request.json
-    sms_body = data.get('smsBody')  # Extract the SMS body from the request
+    sms_body = data.get('smsBody')  #extract the SMS body from the request
     bank = data.get('bank')
     date = data.get('date')
     uid = data.get('uid')
@@ -25,8 +25,9 @@ def receive_sms():
     
     print("Transaction Details:", transaction_details)
 
+
     if transaction_details:
-        # Check if a similar transaction already exists
+        #check if a similar transaction already exists
         if not is_duplicate_transaction(transaction_details):
             store_transaction_details(transaction_details)
         else:
@@ -36,7 +37,7 @@ def receive_sms():
 
 @app.route('/rescan', methods=['POST'])
 def rescan():
-    # Delete all existing transactions
+    # delete all existing transactions
     delete_existing_transactions()
     return jsonify({'message': 'Existing transactions deleted for rescan'}), 200
 
@@ -148,4 +149,4 @@ def store_transaction_details(transaction_details):
     db.collection('transactions').add(transaction_details)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=True)

